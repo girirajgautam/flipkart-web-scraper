@@ -1,0 +1,676 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flipkart Price Dashboard</title>
+  <style>
+    :root {
+      --bg: #eef0f3;
+      --panel: #f8f9fb;
+      --card: #ffffff;
+      --text: #151922;
+      --muted: #5d6573;
+      --primary: #315ddf;
+      --bar: rgba(63, 115, 224, 0.82);
+      --grid: rgba(32, 41, 57, 0.12);
+      --line: #d8dde6;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .wrap {
+      width: min(1400px, 96vw);
+      margin: 18px auto 28px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .stat {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 16px 14px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+      text-align: center;
+    }
+
+    .stat .v {
+      margin: 0;
+      font-size: clamp(1.35rem, 2.8vw, 2.15rem);
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .stat .l {
+      margin: 4px 0 0;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .panel {
+      background: var(--panel);
+      border-top: 1px solid #d7dbe4;
+      border-bottom: 1px solid #d7dbe4;
+      padding: 18px 14px 14px;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .legend {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .chart-note {
+      margin: 0;
+      color: #64748b;
+      font-size: 0.82rem;
+    }
+
+    .legend::before {
+      content: "";
+      width: 48px;
+      height: 14px;
+      display: inline-block;
+      margin-right: 8px;
+      vertical-align: -2px;
+      background: var(--bar);
+      border: 1px solid rgba(70, 110, 210, 0.35);
+    }
+
+    .chart-box {
+      position: relative;
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      background: #f3f4f6;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+
+    .chart-box::-webkit-scrollbar {
+      height: 10px;
+    }
+
+    .chart-box::-webkit-scrollbar-track {
+      background: #e7edf8;
+      border-radius: 999px;
+    }
+
+    .chart-box::-webkit-scrollbar-thumb {
+      background: #93a9da;
+      border-radius: 999px;
+    }
+
+    .chart-box::-webkit-scrollbar-thumb:hover {
+      background: #6f8ecf;
+    }
+
+    canvas {
+      display: block;
+      width: auto;
+      min-width: 100%;
+      height: 390px;
+      background: #f3f4f6;
+    }
+
+    .chart-tip {
+      position: fixed;
+      z-index: 30;
+      display: none;
+      width: auto;
+      max-width: min(560px, calc(100vw - 20px));
+      background: rgba(31, 41, 55, 0.95);
+      color: #f8fafc;
+      padding: 7px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 7px;
+      font-size: 0.9rem;
+      line-height: 1.2;
+      pointer-events: none;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+      transform: translateY(2px);
+      opacity: 0;
+      transition: opacity 120ms ease, transform 120ms ease;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chart-tip.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .chart-tip .tt-title {
+      display: inline;
+      margin: 0;
+      font-size: 0.9rem;
+      color: #dbeafe;
+    }
+
+    .chart-tip .tt-price {
+      display: inline;
+      margin: 0;
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .chart-tip .dot {
+      width: 10px;
+      height: 10px;
+      display: inline-block;
+      border: 1px solid #dbeafe;
+      background: #6e95e9;
+      margin-right: 6px;
+      vertical-align: -1px;
+    }
+
+    .controls {
+      padding: 18px 0 12px;
+    }
+
+    #search {
+      width: min(360px, 100%);
+      padding: 10px 12px;
+      border: 1px solid #b8c0ce;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border: 1px solid var(--line);
+    }
+
+    thead th {
+      text-align: left;
+      padding: 12px;
+      background: #edf0f5;
+      font-size: 0.95rem;
+    }
+
+    tbody td {
+      padding: 11px 12px;
+      border-top: 1px solid #e7ebf1;
+      vertical-align: top;
+    }
+
+    .c-price, .h-price { width: 150px; white-space: nowrap; }
+    .c-link, .h-link { width: 90px; white-space: nowrap; }
+
+    a { color: #1d4ed8; }
+
+    .empty {
+      padding: 14px;
+      color: #8a2330;
+      background: #fff1f2;
+      border: 1px solid #fecdd3;
+      border-radius: 8px;
+    }
+
+    @media (max-width: 960px) {
+      .stats { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
+      canvas { height: 320px; }
+      .chart-note { width: 100%; }
+    }
+
+    @media (max-width: 620px) {
+      .stats { grid-template-columns: 1fr; }
+      .h-price, .c-price, .h-link, .c-link { width: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="stats">
+      <article class="stat"><h2 id="total" class="v">-</h2><p class="l">Total Products</p></article>
+      <article class="stat"><h2 id="cheap" class="v">-</h2><p class="l">Cheapest</p></article>
+      <article class="stat"><h2 id="expensive" class="v">-</h2><p class="l">Most Expensive</p></article>
+      <article class="stat"><h2 id="avg" class="v">-</h2><p class="l">Average Price</p></article>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <p class="legend">Price (INR)</p>
+        <p class="chart-note">Hover bar for details, click to open product, scroll chart left/right.</p>
+      </div>
+      <div class="chart-box">
+        <canvas id="priceChart"></canvas>
+      </div>
+      <div id="chartTip" class="chart-tip"></div>
+    </section>
+
+    <section class="controls">
+      <input id="search" type="text" placeholder="Search product title..." />
+    </section>
+
+    <section>
+      <table>
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th class="h-price">Price (INR)</th>
+            <th class="h-link">Link</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script>
+    function parseCsv(text) {
+      const rows = [];
+      let row = [];
+      let cell = "";
+      let inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const next = text[i + 1];
+        if (ch === '"') {
+          if (inQuotes && next === '"') {
+            cell += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === ',' && !inQuotes) {
+          row.push(cell);
+          cell = "";
+        } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+          if (ch === '\r' && next === '\n') i++;
+          row.push(cell);
+          if (row.some(v => v.trim() !== "")) rows.push(row);
+          row = [];
+          cell = "";
+        } else {
+          cell += ch;
+        }
+      }
+      if (cell.length || row.length) {
+        row.push(cell);
+        if (row.some(v => v.trim() !== "")) rows.push(row);
+      }
+      return rows;
+    }
+
+    function parsePrice(raw) {
+      const val = String(raw || "").replace(/[^\d.]/g, "");
+      const num = Number(val);
+      return Number.isFinite(num) ? num : 0;
+    }
+
+    function inr(v) {
+      return "Rs. " + Math.round(v).toLocaleString("en-IN");
+    }
+
+    function shortTitle(text, maxLen = 44) {
+      const t = String(text || "").trim();
+      if (t.length <= maxLen) return t;
+      return t.slice(0, maxLen - 3).trimEnd() + "...";
+    }
+
+    function escapeHtml(text) {
+      return String(text || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll("\"", "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function roundedRectPath(ctx, x, y, w, h, r) {
+      const radius = Math.max(0, Math.min(r, w / 2, h / 2));
+      ctx.beginPath();
+      ctx.moveTo(x, y + h);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.lineTo(x + w - radius, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+      ctx.lineTo(x + w, y + h);
+      ctx.closePath();
+    }
+
+    const chartState = {
+      items: [],
+      bars: [],
+      hovered: -1,
+      width: 0,
+      height: 0
+    };
+
+    function drawChart(items, hovered = -1) {
+      const canvas = document.getElementById("priceChart");
+      const chartBox = document.querySelector(".chart-box");
+      const dpr = window.devicePixelRatio || 1;
+      const visibleWidth = Math.max(900, Math.floor(chartBox.clientWidth));
+      const barWidth = 24;
+      const gap = 10;
+      const pad = { top: 16, right: 16, bottom: 24, left: 58 };
+      const width = Math.max(visibleWidth, pad.left + pad.right + gap + (items.length * (barWidth + gap)));
+      const height = Math.floor(canvas.getBoundingClientRect().height || 390);
+
+      canvas.style.width = width + "px";
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      ctx.clearRect(0, 0, width, height);
+
+      const h = height - pad.top - pad.bottom;
+      const max = Math.max(...items.map(i => i.price), 1);
+      const steps = 6;
+
+      ctx.strokeStyle = "rgba(107, 114, 128, 0.2)";
+      ctx.lineWidth = 1;
+      ctx.fillStyle = "#4b5563";
+      ctx.font = "12px Segoe UI";
+
+      for (let s = 0; s <= steps; s++) {
+        const y = pad.top + (h / steps) * s;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(width - pad.right, y);
+        ctx.stroke();
+
+        const val = max - (max / steps) * s;
+        ctx.fillText(Math.round(val).toLocaleString("en-IN"), 6, y + 4);
+      }
+
+      const bars = [];
+      const n = items.length;
+      for (let i = 0; i < n; i++) {
+        const item = items[i];
+        const bh = (item.price / max) * h;
+        const x = pad.left + gap + i * (barWidth + gap);
+        const y = pad.top + (h - bh);
+        const isHover = i === hovered;
+        const radius = 0;
+        const grad = ctx.createLinearGradient(x, y, x, y + bh);
+        if (isHover) {
+          grad.addColorStop(0, "#7ca0eb");
+          grad.addColorStop(1, "#6b8fdf");
+        } else {
+          grad.addColorStop(0, "#7297e6");
+          grad.addColorStop(1, "#668cdd");
+        }
+
+        ctx.save();
+        if (isHover) {
+          ctx.shadowColor = "rgba(59, 130, 246, 0.22)";
+          ctx.shadowBlur = 8;
+          ctx.shadowOffsetY = 1;
+        } else {
+          ctx.shadowColor = "rgba(59, 130, 246, 0.1)";
+          ctx.shadowBlur = 2;
+          ctx.shadowOffsetY = 0;
+        }
+        ctx.fillStyle = grad;
+        ctx.fillRect(x, y, barWidth, bh);
+        ctx.restore();
+
+        ctx.strokeStyle = isHover ? "rgba(54, 95, 200, 0.95)" : "rgba(82, 112, 196, 0.45)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, Math.max(1, barWidth - 1), Math.max(1, bh - 1));
+        bars.push({ x, y, w: barWidth, h: bh, item, index: i });
+      }
+
+      if (hovered >= 0 && hovered < bars.length) {
+        const hb = bars[hovered];
+        const cx = hb.x + (hb.w / 2);
+        const title = shortTitle(hb.item.title, 30);
+        const price = inr(hb.item.price);
+        ctx.strokeStyle = "rgba(96, 124, 198, 0.55)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx, pad.top);
+        ctx.lineTo(cx, height - pad.bottom);
+        ctx.stroke();
+
+        ctx.font = "12px Segoe UI";
+        const titleW = ctx.measureText(title).width;
+        const priceW = ctx.measureText(price).width;
+        const boxW = Math.max(titleW, priceW) + 14;
+        const boxH = 34;
+        const boxX = Math.min(
+          width - pad.right - boxW - 2,
+          Math.max(pad.left + 2, cx - (boxW / 2))
+        );
+        const boxY = Math.max(pad.top + 2, hb.y - boxH - 8);
+
+        ctx.fillStyle = "rgba(31, 41, 55, 0.95)";
+        roundedRectPath(ctx, boxX, boxY, boxW, boxH, 6);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.22)";
+        ctx.stroke();
+
+        ctx.fillStyle = "#dbeafe";
+        ctx.fillText(title, boxX + 7, boxY + 14);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 12px Segoe UI";
+        ctx.fillText(price, boxX + 7, boxY + 28);
+      }
+
+      ctx.strokeStyle = "#b7bfcc";
+      ctx.beginPath();
+      ctx.moveTo(pad.left, pad.top);
+      ctx.lineTo(pad.left, height - pad.bottom);
+      ctx.lineTo(width - pad.right, height - pad.bottom);
+      ctx.stroke();
+
+      if (!items.length) {
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "14px Segoe UI";
+        ctx.fillText("No products found.", pad.left + 10, pad.top + 24);
+      }
+
+      chartState.items = items;
+      chartState.bars = bars;
+      chartState.hovered = hovered;
+      chartState.width = width;
+      chartState.height = height;
+    }
+
+    function findHitBar(x, y) {
+      for (let i = 0; i < chartState.bars.length; i++) {
+        const b = chartState.bars[i];
+        if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return i;
+      }
+      return -1;
+    }
+
+    function setTooltipPosition(tip, clientX, clientY) {
+      const margin = 12;
+      const tipRect = tip.getBoundingClientRect();
+      let left = clientX + 14;
+      let top = clientY - 16;
+
+      if (left + tipRect.width > window.innerWidth - margin) {
+        left = clientX - tipRect.width - 14;
+      }
+      if (top + tipRect.height > window.innerHeight - margin) {
+        top = window.innerHeight - tipRect.height - margin;
+      }
+      if (top < margin) {
+        top = clientY + 14;
+      }
+      if (left < margin) {
+        left = margin;
+      }
+
+      tip.style.left = left + "px";
+      tip.style.top = top + "px";
+    }
+
+    function bindChartHover() {
+      const canvas = document.getElementById("priceChart");
+      const chartBox = document.querySelector(".chart-box");
+      const tip = document.getElementById("chartTip");
+      canvas.style.cursor = "default";
+
+      chartBox.addEventListener("wheel", (e) => {
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+          chartBox.scrollLeft += e.deltaY;
+          e.preventDefault();
+        }
+      }, { passive: false });
+
+      canvas.addEventListener("mousemove", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = chartState.width / rect.width;
+        const scaleY = chartState.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+        const hit = findHitBar(x, y);
+
+        if (hit === -1) {
+          tip.classList.remove("show");
+          tip.style.display = "none";
+          canvas.style.cursor = "default";
+          if (chartState.hovered !== -1) drawChart(chartState.items, -1);
+          return;
+        }
+
+        tip.classList.remove("show");
+        tip.style.display = "none";
+        canvas.style.cursor = "pointer";
+
+        if (chartState.hovered !== hit) drawChart(chartState.items, hit);
+      });
+
+      canvas.addEventListener("mouseleave", () => {
+        tip.classList.remove("show");
+        tip.style.display = "none";
+        canvas.style.cursor = "default";
+        if (chartState.hovered !== -1) drawChart(chartState.items, -1);
+      });
+
+      canvas.addEventListener("click", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = chartState.width / rect.width;
+        const scaleY = chartState.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+        const hit = findHitBar(x, y);
+        if (hit !== -1) {
+          const b = chartState.bars[hit];
+          if (b.item.link && b.item.link !== "#") {
+            window.open(b.item.link, "_blank", "noopener,noreferrer");
+          }
+        }
+      });
+    }
+
+    function currentFiltered(data, query) {
+      const q = query.trim().toLowerCase();
+      return !q ? data : data.filter(d => d.title.toLowerCase().includes(q));
+    }
+
+    function renderFiltered(data, query) {
+      const filtered = currentFiltered(data, query);
+      renderTable(filtered);
+      const chartItems = filtered.slice().sort((a, b) => a.price - b.price);
+      drawChart(chartItems);
+      return filtered;
+    }
+
+    function renderTable(items) {
+      const tbody = document.getElementById("tbody");
+      tbody.innerHTML = "";
+      const frag = document.createDocumentFragment();
+
+      items.forEach((item) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${item.title}</td>
+          <td class="c-price">${inr(item.price)}</td>
+          <td class="c-link"><a href="${item.link}" target="_blank" rel="noopener noreferrer">View</a></td>
+        `;
+        frag.appendChild(tr);
+      });
+
+      tbody.appendChild(frag);
+    }
+
+    async function init() {
+      const res = await fetch("flipkart_products_all_pages.csv");
+      const text = await res.text();
+      const rows = parseCsv(text);
+
+      const head = rows[0].map(h => h.trim().toLowerCase());
+      const ti = head.indexOf("title");
+      const pi = head.indexOf("price");
+      const li = head.indexOf("link");
+
+      if (ti < 0 || pi < 0 || li < 0) {
+        throw new Error("CSV must have title, price, link columns.");
+      }
+
+      const data = rows.slice(1).map(r => ({
+        title: (r[ti] || "").trim() || "Untitled",
+        price: parsePrice(r[pi]),
+        link: (r[li] || "#").trim() || "#"
+      })).filter(x => x.price > 0);
+
+      if (!data.length) {
+        document.body.innerHTML = '<main class="wrap"><div class="empty">No valid price rows found in CSV.</div></main>';
+        return;
+      }
+
+      const prices = data.map(d => d.price);
+      const min = Math.min(...prices);
+      const max = Math.max(...prices);
+      const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
+
+      document.getElementById("total").textContent = data.length;
+      document.getElementById("cheap").textContent = inr(min);
+      document.getElementById("expensive").textContent = inr(max);
+      document.getElementById("avg").textContent = inr(avg);
+
+      bindChartHover();
+      renderFiltered(data, "");
+
+      const input = document.getElementById("search");
+      input.addEventListener("input", () => {
+        renderFiltered(data, input.value);
+      });
+
+      window.addEventListener("resize", () => {
+        const filtered = currentFiltered(data, input.value);
+        const chartItems = filtered.slice().sort((a, b) => a.price - b.price);
+        drawChart(chartItems, -1);
+      });
+    }
+
+    init().catch((err) => {
+      document.body.innerHTML = `<main class="wrap"><div class="empty">${err.message} If you opened this from file://, run a local server (python -m http.server).</div></main>`;
+    });
+  </script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 # ======================================
-# Flipkart Professional Multi-Threaded Scraper
+# Flipkart Professional Full Multi-Threaded Scraper
 # ======================================
 
 from selenium import webdriver
@@ -20,17 +20,19 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # --------------------------------------
 # CONFIG
 # --------------------------------------
-BASE_URL = "https://www.flipkart.com/womens-footwear/pr?sid=osp,iko&page={}"
-MAX_PAGES = 10  # number of pages to scrape
+BASE_URL = "https://www.flipkart.com/womens-footwear/pr?sid=osp,iko&fm=neo%2Fmerchandising&page={}"
 SCROLL_DELAY = (1, 2)
 REQUEST_DELAY = (0.2, 0.5)
-OUTPUT_FILE = "flipkart_products_fast_multithread.csv"
-MAX_THREADS = 10  # number of parallel threads
+OUTPUT_FILE = "flipkart_products_all_pages.csv"
+MAX_THREADS = 20  # parallel threads
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
     "Accept-Language": "en-US,en;q=0.9"
 }
+
+PRODUCT_CONTAINER_SELECTOR = "div.bLCLBY.nr15la"  # main product container
+PRODUCT_LINK_SELECTOR = "a[href*='/p/']"  # product link inside container
 
 # --------------------------------------
 # SELENIUM DRIVER
@@ -40,7 +42,7 @@ def create_driver():
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-gpu")
     options.add_argument("--disable-extensions")
-    options.add_argument("--blink-settings=imagesEnabled=false")
+    options.add_argument("--blink-settings=imagesEnabled=false")  # no images
 
     driver = webdriver.Chrome(
         service=Service(ChromeDriverManager().install()),
@@ -54,45 +56,60 @@ def create_driver():
 def collect_links():
     driver, wait = create_driver()
     product_links = set()
+    page = 1
 
-    for page in range(1, MAX_PAGES + 1):
+    while True:
         print(f"[PAGE] {page}")
         driver.get(BASE_URL.format(page))
         time.sleep(random.uniform(*SCROLL_DELAY))
 
-        # Close login popup safely
+        # Close login popup if it appears
         try:
-            wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "button._2KpZ6l._2doB4z"))
-            ).click()
+            close_btn = driver.find_element(By.CSS_SELECTOR, "button._2KpZ6l._2doB4z")
+            close_btn.click()
+            time.sleep(1)
         except:
             pass
 
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(random.uniform(*SCROLL_DELAY))
+        # Scroll multiple times to load all products
+        for _ in range(7):
+            driver.execute_script("window.scrollBy(0, 2500)")
+            time.sleep(random.uniform(1, 2))
 
+        # Wait for at least one product container
         try:
-            anchors = wait.until(
-                EC.presence_of_all_elements_located(
-                    (By.CSS_SELECTOR, "a[href*='/p/']")
-                )
+            wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, PRODUCT_CONTAINER_SELECTOR))
             )
         except:
-            print("⚠️ Failed to load products")
-            continue
+            print(f"⚠️ No products found on page {page}, stopping.")
+            break
 
-        for a in anchors:
-            link = a.get_attribute("href")
-            if link:
-                product_links.add(link)
+        # Collect all product links on this page
+        containers = driver.find_elements(By.CSS_SELECTOR, PRODUCT_CONTAINER_SELECTOR)
+        new_links = set()
+        for c in containers:
+            anchors = c.find_elements(By.CSS_SELECTOR, PRODUCT_LINK_SELECTOR)
+            for a in anchors:
+                link = a.get_attribute("href")
+                if link:
+                    new_links.add(link)
 
+        # Only add new links
+        new_links -= product_links
+        if not new_links:
+            print("No new links found → finished scraping pages.")
+            break
+
+        product_links.update(new_links)
         print(f"Collected so far: {len(product_links)} links")
+        page += 1
 
     driver.quit()
     return list(product_links)
 
 # --------------------------------------
-# PHASE 2: SCRAPE PRODUCT DETAILS (FAST)
+# PHASE 2: SCRAPE PRODUCT DETAILS
 # --------------------------------------
 def scrape_product(url):
     try:
@@ -144,17 +161,15 @@ def main():
             # Optional small delay to avoid blocking
             time.sleep(random.uniform(*REQUEST_DELAY))
 
-            # Print progress
+            # Print progress and save periodically
             if i % 20 == 0 or i == len(links):
                 print(f"[PRODUCTS SCRAPED] {i}/{len(links)}")
-                # Save periodically
                 df = pd.DataFrame(products)
                 df.to_csv(OUTPUT_FILE, index=False)
 
     # Final save
     df = pd.DataFrame(products)
     df.to_csv(OUTPUT_FILE, index=False)
-
     print(f"\n🎉 DONE! Scraped {len(products)} products to {OUTPUT_FILE}")
 
 # --------------------------------------
