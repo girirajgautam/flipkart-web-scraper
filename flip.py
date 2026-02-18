@@ -23,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 BASE_URL = "https://www.flipkart.com/womens-footwear/pr?sid=osp,iko&fm=neo%2Fmerchandising&page={}"
 SCROLL_DELAY = (1, 2)
 REQUEST_DELAY = (0.2, 0.5)
-OUTPUT_FILE = "flipkart_products_all_pages.csv"
+OUTPUT_FILE = "flip_products_all_pages.csv"
 MAX_THREADS = 20  # parallel threads
 
 HEADERS = {
